@@ -1,4 +1,5 @@
 use crate::types::{RedisGetResult, RedisValue};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -32,11 +33,35 @@ impl RedisStore {
 
     pub fn append(&self, key: String, value: String) -> Result<(), Box<dyn std::error::Error>> {
         let mut store = self.data.lock().unwrap();
+
         if let Some(existing) = store.get_mut(&key) {
-            existing.data.push_str(&value);
+            // Parse the existing data as JSON array
+            let mut current_array: Value = serde_json::from_str(&existing.data)
+                .map_err(|_| "Existing data is not a valid JSON array")?;
+
+            // Parse the new value as JSON
+            let new_value: Value =
+                serde_json::from_str(&value).map_err(|_| "New value is not valid JSON")?;
+
+            // Ensure we have an array
+            if !current_array.is_array() {
+                return Err("Existing data is not a JSON array".into());
+            }
+
+            // Add the new value to the array
+            if let Value::Array(ref mut arr) = current_array {
+                arr.push(new_value);
+                // Update the stored value
+                existing.data = serde_json::to_string(&current_array)?;
+            }
         } else {
+            // If key doesn't exist, create new array with single element
+            let new_value: Value =
+                serde_json::from_str(&value).map_err(|_| "New value is not valid JSON")?;
+
+            let array = json!([new_value]);
             let value = RedisValue {
-                data: value,
+                data: array.to_string(),
                 expires_at: None,
             };
             store.insert(key, value);
