@@ -1,0 +1,8 @@
+[package]
+name = "redis_test_simple"
+version = "0.1.0"
+authors = ["Brandon Etter"]
+edition = "2021"
+[dependencies]
+
+tokio = { version = "1.23.0", features = ["full"] } # async networking
