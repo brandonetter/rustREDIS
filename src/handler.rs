@@ -27,7 +27,8 @@ async fn handle_request(
 
     if !command_parts.is_empty() {
         print!("command_parts: {:?}", command_parts);
-        match command_parts[0].as_str() {
+
+        match command_parts[0].as_str().to_uppercase().as_str() {
             "ECHO" => {
                 if command_parts.len() > 1 {
                     let response = format!("+{}\r\n", command_parts[1]);
@@ -58,6 +59,10 @@ async fn handle_request(
                     };
                     stream.write_all(response.as_bytes()).await?;
                 }
+            }
+            "INFO" => {
+                let response = format!("+{}\r\n", "redis_version:0.0.1");
+                stream.write_all(response.as_bytes()).await?;
             }
             _ => {
                 println!("Unknown command: {:?}", command_parts);

@@ -12,6 +12,7 @@ use tokio::net::TcpListener;
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
     let store = Arc::new(RedisStore::new());
+    print!("Listening on 127.0.0.1:6379");
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
