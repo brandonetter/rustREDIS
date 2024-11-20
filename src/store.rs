@@ -30,6 +30,19 @@ impl RedisStore {
         Ok(())
     }
 
+    pub fn append(&self, key: String, value: String) -> Result<(), Box<dyn std::error::Error>> {
+        let mut store = self.data.lock().unwrap();
+        if let Some(existing) = store.get_mut(&key) {
+            existing.data.push_str(&value);
+        } else {
+            let value = RedisValue {
+                data: value,
+                expires_at: None,
+            };
+            store.insert(key, value);
+        }
+        Ok(())
+    }
     pub fn get(&self, key: &str) -> RedisGetResult {
         let mut store = self.data.lock().unwrap();
         if let Some(value) = store.get(key) {
