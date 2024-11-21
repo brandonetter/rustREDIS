@@ -19,7 +19,7 @@ impl RedisStore {
     fn values_match(field: &Value, search_value: &str) -> bool {
         match serde_json::from_str::<Value>(search_value) {
             Ok(search_value) => field == &search_value,
-            Err(_) => field == &Value::String(search_value.to_string()),
+            Err(_) => matches!(field, Value::String(s) if s == search_value),
         }
     }
 
@@ -56,20 +56,28 @@ impl RedisStore {
                 return Err("Existing data is not a JSON array".into());
             }
 
-            // Add the new value to the array
+            // Add the new value(s) to the array
             if let Value::Array(ref mut arr) = current_array {
-                arr.push(new_value);
+                match new_value {
+                    Value::Array(values) => arr.extend(values),
+                    value => arr.push(value),
+                }
                 // Update the stored value
                 existing.data = serde_json::to_string(&current_array)?;
             }
         } else {
-            // If key doesn't exist, create new array with single element
+            // Parse the new value as JSON
             let new_value: Value =
                 serde_json::from_str(&value).map_err(|_| "New value is not valid JSON")?;
 
-            let array = json!([new_value]);
+            // Create initial array - if new_value is an array, use its elements directly
+            let array = match new_value {
+                Value::Array(arr) => json!(arr), // This spreads the array elements
+                value => json!([value]),
+            };
+
             let value = RedisValue {
-                data: array.to_string(),
+                data: serde_json::to_string(&array)?,
                 expires_at: None,
             };
             store.insert(key, value);
