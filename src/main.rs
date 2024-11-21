@@ -20,6 +20,7 @@ async fn main() {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
+                println!("Accepted connection");
                 let store_clone = store.clone();
                 tokio::spawn(async move {
                     handle_connection(stream, store_clone).await;
