@@ -15,6 +15,14 @@ impl RedisStore {
         }
     }
 
+    // helper for type coercion
+    fn values_match(field: &Value, search_value: &str) -> bool {
+        match serde_json::from_str::<Value>(search_value) {
+            Ok(search_value) => field == &search_value,
+            Err(_) => field == &Value::String(search_value.to_string()),
+        }
+    }
+
     pub fn set(
         &self,
         key: String,
@@ -70,6 +78,47 @@ impl RedisStore {
     }
     pub fn get(&self, key: &str) -> RedisGetResult {
         let mut store = self.data.lock().unwrap();
+
+        if key.contains('?') {
+            let parts: Vec<&str> = key.split('?').collect();
+            if parts.len() == 2 {
+                if let Some(value) = store.get(parts[0]) {
+                    // parse the value as a JSON object
+                    let json_value: Value = serde_json::from_str(&value.data).unwrap();
+                    // this should be an array of objects
+                    if json_value.is_array() {
+                        // convert the search params to key value pairs
+                        let search_params: HashMap<&str, &str> = parts[1]
+                            .split('&')
+                            .map(|param| {
+                                let parts: Vec<&str> = param.split('=').collect();
+                                (parts[0], parts[1])
+                            })
+                            .collect();
+                        let array = json_value.as_array().unwrap();
+                        // filter the array based on the search params
+                        let filtered_array: Vec<&Value> = array
+                            .iter()
+                            .filter(|item| {
+                                search_params.iter().all(|(key, value)| {
+                                    if let Some(field) = item.get(key) {
+                                        Self::values_match(field, value)
+                                    } else {
+                                        false
+                                    }
+                                })
+                            })
+                            .collect();
+                        return RedisGetResult::Value(
+                            serde_json::to_string(&filtered_array).unwrap(),
+                        );
+                    } else {
+                        return RedisGetResult::None;
+                    }
+                }
+            }
+        }
+
         if let Some(value) = store.get(key) {
             if let Some(expiry) = value.expires_at {
                 if SystemTime::now() > expiry {

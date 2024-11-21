@@ -10,7 +10,6 @@ pub async fn handle_connection(mut stream: TcpStream, store: Arc<RedisStore>) {
     loop {
         let n = stream.read(&mut buf).await.unwrap();
         let request = String::from_utf8_lossy(&buf[..n]);
-        println!("request: {}", request);
         let _ = handle_request(&request, &mut stream, store.clone()).await;
         if n == 0 {
             break;
