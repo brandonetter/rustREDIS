@@ -32,7 +32,7 @@ async fn handle_request(
                     stream.write_all(response.as_bytes()).await?;
                 }
             }
-            "PING" => {
+            "HEALTH" | "PING" => {
                 stream.write_all("+PONG\r\n".as_bytes()).await?;
             }
             "SET" => {

@@ -4,13 +4,17 @@ mod store;
 mod types;
 
 use handler::handle_connection;
+use std::env;
 use std::sync::Arc;
 use store::RedisStore;
 use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
+    let port = env::var("PORT").unwrap_or_else(|_| "6379".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+
+    let listener = TcpListener::bind(&addr).await.unwrap();
     let store = Arc::new(RedisStore::new());
     print!("Listening on 127.0.0.1:6379");
     loop {
