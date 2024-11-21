@@ -27,6 +27,37 @@ fn test_get_nonexistent_key() {
         _ => panic!("Expected None variant for nonexistent key"),
     }
 }
+#[test]
+fn test_search_params() {
+    use serde_json::Value;
+    let store = RedisStore::new();
+
+    // append an array of json objects to test key
+    store
+        .set("test_key".to_string(), "[{\"name\":\"John\",\"age\":30,\"city\":\"New York\"},{\"name\":\"Jane\",\"age\":25,\"city\":\"Chicago\"}]".to_string(), None)
+        .unwrap();
+
+    // test for a get with no search params
+    match store.get("test_key") {
+        RedisGetResult::Value(val) => assert_eq!(val, "[{\"name\":\"John\",\"age\":30,\"city\":\"New York\"},{\"name\":\"Jane\",\"age\":25,\"city\":\"Chicago\"}]"),
+        _ => panic!("Expected Value variant"),
+    }
+
+    // test for a get with search params
+    match store.get("test_key?name=John") {
+        RedisGetResult::Value(val) => {
+            // Parse both JSONs to Value objects
+            let actual: Value = serde_json::from_str(&val).unwrap();
+            let expected: Value =
+                serde_json::from_str("[{\"name\":\"John\",\"age\":30,\"city\":\"New York\"}]")
+                    .unwrap();
+
+            // This will compare the semantic equality, not string equality
+            assert_eq!(actual, expected);
+        }
+        _ => panic!("Expected Value variant"),
+    }
+}
 
 #[test]
 fn test_expiration() {
