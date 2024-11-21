@@ -16,7 +16,7 @@ async fn main() {
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     let store = Arc::new(RedisStore::new());
-    print!("Listening on 127.0.0.1:6379");
+    println!("Listening on {}", addr);
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
