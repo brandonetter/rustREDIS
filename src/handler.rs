@@ -33,6 +33,7 @@ async fn handle_request(
                 }
             }
             "HEALTH" | "PING" => {
+                println!("Health check");
                 stream.write_all("+PONG\r\n".as_bytes()).await?;
             }
             "SET" => {

@@ -10,25 +10,35 @@ use store::RedisStore;
 use tokio::net::TcpListener;
 
 #[tokio::main]
-async fn main() {
-    let port = env::var("PORT").unwrap_or_else(|_| "6379".to_string());
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let port = env::var("PORT").unwrap_or_else(|_| "10000".to_string());
     let addr = format!("0.0.0.0:{}", port);
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
+    println!("⚡ Starting server on {}", addr);
+
     let store = Arc::new(RedisStore::new());
-    println!("Listening on {}", addr);
+
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(l) => {
+            println!("✅ Successfully bound to {}", addr);
+            l
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to bind: {}", e);
+            return Err(e.into());
+        }
+    };
+
     loop {
         match listener.accept().await {
-            Ok((stream, _)) => {
-                println!("Accepted connection");
-                let store_clone = store.clone();
+            Ok((stream, addr)) => {
+                println!("📡 Connection from: {}", addr);
+                let store_clone = Arc::clone(&store);
                 tokio::spawn(async move {
                     handle_connection(stream, store_clone).await;
                 });
             }
-            Err(e) => {
-                println!("error: {}", e);
-            }
+            Err(e) => eprintln!("❌ Accept error: {}", e),
         }
     }
 }
