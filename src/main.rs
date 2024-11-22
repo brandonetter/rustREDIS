@@ -11,7 +11,7 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let port = env::var("PORT").unwrap_or_else(|_| "10000".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "6379".to_string());
     let addr = format!("0.0.0.0:{}", port);
 
     println!("⚡ Starting server on {}", addr);

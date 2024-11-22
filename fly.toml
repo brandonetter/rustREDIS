@@ -1,0 +1,12 @@
+app = "your-redis-app"
+primary_region = "dfw"
+
+[env]
+PORT = "6379"
+
+[[services]]
+internal_port = 6379
+protocol = "tcp"
+
+  [[services.ports]]
+    port = 6379
