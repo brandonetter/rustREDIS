@@ -1,4 +1,4 @@
-app = "your-redis-app"
+app = "rustredis"
 primary_region = "dfw"
 
 [env]
@@ -10,3 +10,7 @@ protocol = "tcp"
 
   [[services.ports]]
     port = 6379
+    handlers = ["tcp"]
+
+[deploy]
+strategy = "immediate"
