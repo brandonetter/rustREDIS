@@ -10,7 +10,7 @@ protocol = "tcp"
 
   [[services.ports]]
     port = 6379
-    handlers = ["tcp"]
+    handlers = ["proxy_proto"]
 
 [deploy]
 strategy = "immediate"
