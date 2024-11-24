@@ -1,3 +1,4 @@
+use crate::search_parser::SearchParser;
 use crate::types::{RedisGetResult, RedisValue};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -12,14 +13,6 @@ impl RedisStore {
     pub fn new() -> Self {
         RedisStore {
             data: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    // helper for type coercion
-    fn values_match(field: &Value, search_value: &str) -> bool {
-        match serde_json::from_str::<Value>(search_value) {
-            Ok(search_value) => field == &search_value,
-            Err(_) => matches!(field, Value::String(s) if s == search_value),
         }
     }
 
@@ -91,38 +84,23 @@ impl RedisStore {
             let parts: Vec<&str> = key.split('?').collect();
             if parts.len() == 2 {
                 if let Some(value) = store.get(parts[0]) {
-                    // parse the value as a JSON object
-                    let json_value: Value = serde_json::from_str(&value.data).unwrap();
-                    // this should be an array of objects
-                    if json_value.is_array() {
-                        // convert the search params to key value pairs
-                        let search_params: HashMap<&str, &str> = parts[1]
-                            .split('&')
-                            .map(|param| {
-                                let parts: Vec<&str> = param.split('=').collect();
-                                (parts[0], parts[1])
-                            })
-                            .collect();
-                        let array = json_value.as_array().unwrap();
-                        // filter the array based on the search params
+                    let json_value: Value = match serde_json::from_str(&value.data) {
+                        Ok(v) => v,
+                        Err(_) => return RedisGetResult::None,
+                    };
+
+                    if let Value::Array(array) = json_value {
+                        let conditions = SearchParser::parse_search_params(parts[1]);
                         let filtered_array: Vec<&Value> = array
                             .iter()
-                            .filter(|item| {
-                                search_params.iter().all(|(key, value)| {
-                                    if let Some(field) = item.get(key) {
-                                        Self::values_match(field, value)
-                                    } else {
-                                        false
-                                    }
-                                })
-                            })
+                            .filter(|item| SearchParser::matches_conditions(item, &conditions))
                             .collect();
+
                         return RedisGetResult::Value(
-                            serde_json::to_string(&filtered_array).unwrap(),
+                            serde_json::to_string(&filtered_array).unwrap_or_default(),
                         );
-                    } else {
-                        return RedisGetResult::None;
                     }
+                    return RedisGetResult::None;
                 }
             }
         }

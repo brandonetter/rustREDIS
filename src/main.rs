@@ -1,5 +1,6 @@
 mod handler;
 mod parser;
+mod search_parser;
 mod store;
 mod types;
 
