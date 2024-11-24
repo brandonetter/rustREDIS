@@ -63,9 +63,8 @@ impl RedisStore {
             let new_value: Value =
                 serde_json::from_str(&value).map_err(|_| "New value is not valid JSON")?;
 
-            // Create initial array - if new_value is an array, use its elements directly
             let array = match new_value {
-                Value::Array(arr) => json!(arr), // This spreads the array elements
+                Value::Array(arr) => json!(arr),
                 value => json!([value]),
             };
 
@@ -80,9 +79,11 @@ impl RedisStore {
     pub fn get(&self, key: &str) -> RedisGetResult {
         let mut store = self.data.lock().unwrap();
 
+        // Handle search query on namespaced key
         if key.contains('?') {
             let parts: Vec<&str> = key.split('?').collect();
             if parts.len() == 2 {
+                // Keep namespace on the key when searching
                 if let Some(value) = store.get(parts[0]) {
                     let json_value: Value = match serde_json::from_str(&value.data) {
                         Ok(v) => v,
@@ -105,6 +106,7 @@ impl RedisStore {
             }
         }
 
+        // Normal get with namespaced key
         if let Some(value) = store.get(key) {
             if let Some(expiry) = value.expires_at {
                 if SystemTime::now() > expiry {
