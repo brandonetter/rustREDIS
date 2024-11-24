@@ -1,7 +1,9 @@
+use crate::metrics::{MetricsCollector, METRICS_KEY};
 use crate::parser::parse_command;
 use crate::store::RedisStore;
 use crate::types::RedisGetResult;
 use std::sync::Arc;
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -23,7 +25,6 @@ pub async fn handle_connection(mut stream: TcpStream, store: Arc<RedisStore>) {
         }
     }
 }
-
 async fn handle_request(
     request: &str,
     stream: &mut TcpStream,
@@ -31,6 +32,8 @@ async fn handle_request(
     connection: &mut Connection,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let command_parts = parse_command(request);
+    let start = std::time::Instant::now();
+    let mut response_bytes = 0;
 
     if !command_parts.is_empty() {
         match command_parts[0].as_str().to_uppercase().as_str() {
@@ -50,7 +53,7 @@ async fn handle_request(
                             return Ok(());
                         };
 
-                        match cmd {
+                        let response = match cmd {
                             "SET" => {
                                 if command_parts.len() > 2 {
                                     let px = if command_parts.len() > 4 {
@@ -59,36 +62,50 @@ async fn handle_request(
                                         None
                                     };
                                     store.set(key, command_parts[2].clone(), px)?;
-                                    stream.write_all("+OK\r\n".as_bytes()).await?;
+                                    "+OK\r\n".to_string()
+                                } else {
+                                    "-ERR wrong number of arguments\r\n".to_string()
                                 }
                             }
-                            "GET" => {
-                                let response: String = match store.get(&key) {
-                                    RedisGetResult::Value(value) => format!("+{}\r\n", value),
-                                    RedisGetResult::None => "+\r\n".to_string(),
-                                    RedisGetResult::Expired => "$-1\r\n".to_string(),
-                                };
-                                stream.write_all(response.as_bytes()).await?;
-                            }
+                            "GET" => match store.get(&key) {
+                                RedisGetResult::Value(value) => format!("+{}\r\n", value),
+                                RedisGetResult::None => "+\r\n".to_string(),
+                                RedisGetResult::Expired => "$-1\r\n".to_string(),
+                            },
                             "APPEND" => {
                                 if command_parts.len() > 2 {
-                                    let response = match store.append(key, command_parts[2].clone())
-                                    {
+                                    match store.append(key, command_parts[2].clone()) {
                                         Ok(_) => "+OK\r\n".to_string(),
                                         Err(e) => format!("-ERR {}\r\n", e),
-                                    };
-                                    stream.write_all(response.as_bytes()).await?;
+                                    }
+                                } else {
+                                    "-ERR wrong number of arguments\r\n".to_string()
                                 }
                             }
                             _ => unreachable!(),
+                        };
+
+                        // Update response bytes and send response
+                        response_bytes = response.len();
+                        stream.write_all(response.as_bytes()).await?;
+
+                        // record metrics
+                        if let Some(tenant) = &connection.tenant {
+                            let metrics = MetricsCollector::new(tenant.to_string());
+                            let metric_entry = metrics.create_entry(
+                                command_parts.get(1).cloned().unwrap_or_default(), // endpoint (key)
+                                cmd.to_string(), // method (command)
+                                response_bytes,
+                                start.elapsed().as_micros() as u64,
+                            )?;
+
+                            // Store metric
+                            store.append(format!("{}:{}", tenant, METRICS_KEY), metric_entry)?;
                         }
                     }
                     None => {
-                        stream
-                            .write_all(
-                                "-ERR Tenant name required (use CLIENT SETNAME)\r\n".as_bytes(),
-                            )
-                            .await?;
+                        let response = "-ERR Tenant name required (use CLIENT SETNAME)\r\n";
+                        stream.write_all(response.as_bytes()).await?;
                     }
                 }
             }
@@ -97,17 +114,14 @@ async fn handle_request(
             }
             "ECHO" => {
                 if command_parts.len() > 1 {
-                    stream
-                        .write_all(format!("+{}\r\n", command_parts[1]).as_bytes())
-                        .await?;
+                    let response = format!("+{}\r\n", command_parts[1]);
+                    stream.write_all(response.as_bytes()).await?;
                 }
             }
             "INFO" => {
                 let response = format!("+{}\r\n", "redis_version:0.0.1");
-
                 stream.write_all(response.as_bytes()).await?;
             }
-
             _ => {
                 println!("Unknown command: {:?}", command_parts);
             }

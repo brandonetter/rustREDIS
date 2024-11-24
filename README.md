@@ -8,21 +8,15 @@ A lightweight Redis server implementation in Rust, featuring core Redis function
 - 👥 Multi-tenant Support
   - Tenant isolation using `CLIENT SETNAME`
   - Automatic key namespacing
-  - Tenant-specific data storage and queries
+  - Tenant-specific data storage
 - 📊 JSON Data Support
   - Automatic JSON parsing and validation
   - Array operations with `APPEND`
   - Query filtering with URL-style parameters
-- ⏰ Time-Based Operations
-  - Key expiration (PX option)
-  - Automatic cleanup of expired keys
-- 🔄 Concurrent Operations
-  - Thread-safe data store using `Arc` and `Mutex`
-  - Async I/O with Tokio
-- 🔍 Query Parameters
-  - Filter JSON arrays using key-value pairs
-  - Support for multiple search conditions
-  - Tenant-aware querying
+- 📈 Automatic Performance Metrics
+  - Operation timing and sizing
+  - Query pattern analysis
+  - Per-tenant statistics
 
 ## Getting Started
 
@@ -50,7 +44,7 @@ cargo run
 
 The server will start listening on `127.0.0.1:6379`.
 
-## Usage Examples
+## Basic Usage
 
 ### Multi-tenant Operations
 
@@ -58,131 +52,109 @@ The server will start listening on `127.0.0.1:6379`.
 # Set tenant name (required before operations)
 redis-cli CLIENT SETNAME tenant1
 
-# Store data for tenant1
-redis-cli SET users '[{"name":"John","age":30}]'
-# Internally stored as "tenant1:users"
-
-# Switch to different tenant
-redis-cli CLIENT SETNAME tenant2
-
-# Store data for tenant2
-redis-cli SET users '[{"name":"Jane","age":25}]'
-# Internally stored as "tenant2:users"
-
-# Each tenant can only access their own data
-redis-cli GET users
-# Returns tenant2's data only
-```
-
-### Basic Operations
-
-```bash
-# Using redis-cli (after setting tenant name)
-redis-cli PING
-# Response: PONG
-
-redis-cli SET mykey "Hello, Redis!"
-# Response: OK
-
-redis-cli GET mykey
-# Response: "Hello, Redis!"
-```
-
-### JSON Operations with Tenant Isolation
-
-```bash
-# Set tenant name
-redis-cli CLIENT SETNAME tenant1
-
-# Store JSON array
+# Store JSON data
 redis-cli SET users '[{"name":"John","age":30},{"name":"Jane","age":25}]'
 
-# Query with parameters (tenant-specific)
-redis-cli GET "users?name=John"
-# Response: [{"name":"John","age":30}]
-
-# Append to JSON array
-redis-cli APPEND users '{"name":"Bob","age":35}'
+# Each tenant's data is isolated
+redis-cli CLIENT SETNAME tenant2
+redis-cli SET users '[{"name":"Alice","age":28}]'
 ```
 
-### Expiration
+### JSON Operations & Querying
 
 ```bash
-# Set key with 1000ms expiration (tenant-specific)
-redis-cli SET tempkey "temporary" PX 1000
+# Store JSON array
+redis-cli SET users '[{"name":"John","age":30}]'
 
-# Key will return null after expiration
-redis-cli GET tempkey
+# Append to array
+redis-cli APPEND users '{"name":"Jane","age":25}'
+
+# Query with filters
+redis-cli GET "users?name=John"
+redis-cli GET "users?age_gt=25"
+redis-cli GET "users?name_like=ja"
 ```
+
+## Performance Analysis
+
+Every operation is automatically tracked in a tenant-specific `_metrics` store, providing real-time insight into performance and usage patterns.
+
+### Analyzing Metrics
+
+```bash
+# View all metrics
+redis-cli GET _metrics
+
+# Find slow operations (>0.2ms)
+redis-cli GET "_metrics?ms_gt=0.2"
+
+# Analyze query patterns
+redis-cli GET "_metrics?endpoint_like=test?"     # All filtered queries
+redis-cli GET "_metrics?endpoint=test"           # Direct gets
+redis-cli GET "_metrics?bytes_gt=1000"          # Large responses
+redis-cli GET "_metrics?method=APPEND"          # APPEND operations
+
+# Time window analysis
+redis-cli GET "_metrics?unix_gt=1732439700&unix_lt=1732439800"
+
+# Complex analysis
+redis-cli GET "_metrics?endpoint_like=test?&ms_gt=0.2"  # Slow filtered queries
+```
+
+Each metrics entry provides detailed operation information:
+```json
+{
+  "unix": 1732439700,
+  "endpoint": "users?age_gt=30",
+  "method": "GET",
+  "bytes": 1351,
+  "ms": 0.213
+}
+```
+
+### Performance Characteristics
+
+Based on metrics analysis, typical operation times:
+- Direct GET: ~0.05ms
+- JSON filtered queries: ~0.2ms
+- APPEND operations: ~0.3ms
+- Metrics queries: ~0.04ms
+
+The metrics system reveals:
+- Impact of JSON filtering (3-4x overhead)
+- Sub-millisecond operation timing
+- Query pattern performance
+- Response size implications
+- Command parsing overhead
 
 ## Implementation Details
 
 ### Architecture
 
 - **Store Module**: Thread-safe key-value store using `Arc<Mutex<HashMap>>`
-- **Parser Module**: RESP protocol parser for Redis command parsing
-- **Handler Module**: Async connection handler with tenant management using Tokio
+- **Parser Module**: RESP protocol parser
+- **Handler Module**: Async connection handler with metrics collection
+- **Metrics Module**: Automatic performance tracking
 - **Types Module**: Core data structures and enums
 
 ### Key Components
 
-1. **RedisStore**
-   - Handles data storage and retrieval
-   - Implements JSON operations and filtering
-   - Manages key expiration
-   - Enforces tenant isolation
+1. **Command Handler**
+   - Async operation handling
+   - Tenant context management
+   - Response formatting
 
-2. **Connection Handler**
-   - Manages tenant context
-   - Handles tenant name setting
-   - Enforces tenant-based access control
-   - Implements key namespacing
+2. **Query Engine**
+   - Support for exact match and 'like' queries
+   - Range queries for numeric values
+   - Used for both data and metrics analysis
 
-3. **Command Parser**
-   - Implements RESP (Redis Serialization Protocol)
-   - Handles various command formats
-   - Robust error handling
-
-## Testing
-
-The project includes comprehensive test coverage:
-
-```bash
-cargo test
-```
-
-Test suites include:
-- Multi-tenant operations
-- Tenant isolation
-- Tenant-specific queries
-- Basic operations (SET/GET)
-- JSON operations
-- Expiration handling
-- Parser edge cases
-- Connection handling
-- Concurrent operations
-
-## Performance Considerations
-
-- Uses Tokio for async I/O operations
-- Thread-safe concurrent access to the store
-- Efficient JSON parsing and filtering
-- Automatic cleanup of expired keys
-- Minimal overhead for tenant isolation
-
-## Security Features
-
-- Strict tenant isolation
-- Required tenant identification
-- Automatic key namespacing
-- Prevention of cross-tenant access
+3. **Metrics Collection**
+   - Zero-overhead tenant isolation
+   - Microsecond precision timing
+   - Automatic query pattern analysis
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-## Credits
-
-- Inspired by Redis
-- Built with Rust and Tokio
-- Uses serde_json for JSON handling

@@ -1,4 +1,5 @@
 mod handler;
+mod metrics;
 mod parser;
 mod search_parser;
 mod store;

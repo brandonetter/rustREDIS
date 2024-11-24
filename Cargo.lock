@@ -199,6 +199,7 @@ name = "redis_test_simple"
 version = "0.1.0"
 dependencies = [
  "percent-encoding",
+ "serde",
  "serde_json",
  "tokio",
 ]
