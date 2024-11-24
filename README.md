@@ -17,6 +17,12 @@ A lightweight Redis server implementation in Rust, featuring core Redis function
   - Operation timing and sizing
   - Query pattern analysis
   - Per-tenant statistics
+- ⏰ Time-Based Operations
+  - Key expiration (PX option)
+  - Automatic cleanup of expired keys
+- 🔄 Concurrent Operations
+  - Thread-safe data store using `Arc` and `Mutex`
+  - Async I/O with Tokio
 
 ## Getting Started
 
